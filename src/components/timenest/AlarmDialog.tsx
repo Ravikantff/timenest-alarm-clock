@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, Hourglass, CalendarClock } from "lucide-react";
+import { CalendarIcon, Hourglass, CalendarClock, Music, ImageIcon, Play, Square, Volume2 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { MediaPicker } from "./MediaPicker";
+import { useBlobUrl } from "@/hooks/use-blob-url";
+import { deleteBlob, putBlob, storageErrorMessage } from "@/lib/media-store";
+import { previewDefault, stopRinging } from "@/lib/sound";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -12,6 +17,8 @@ import { cn } from "@/lib/utils";
 import { addDuration, emptyDuration, isZeroDuration, parseField, type Alarm, type Duration } from "@/lib/alarms";
 import { DurationFields, draftFrom, type DurationDraft } from "./DurationFields";
 import { unlockAudio } from "@/lib/sound";
+
+type Media = { kind: "stored"; id: string; name: string } | { kind: "file"; file: File; name: string } | null;
 
 function parseDraft(d: DurationDraft) {
   const errors: Partial<Record<keyof DurationDraft, string>> = {};
@@ -43,10 +50,24 @@ export function AlarmDialog({
   const [snooze, setSnooze] = useState<DurationDraft>(draftFrom({ months: 0, days: 0, hours: 0, minutes: 10 }));
   const [submitted, setSubmitted] = useState(false);
   const [tick, setTick] = useState(0);
+  const [ringtone, setRingtone] = useState<Media>(null);
+  const [image, setImage] = useState<Media>(null);
+  const [volume, setVolume] = useState(80);
+  const [mediaErr, setMediaErr] = useState<{ audio?: string | null; image?: string | null; save?: string | null }>({});
+  const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const ringtoneUrl = useBlobUrl(ringtone ? (ringtone.kind === "file" ? ringtone.file : ringtone.id) : null);
+  const imageUrl = useBlobUrl(image ? (image.kind === "file" ? image.file : image.id) : null);
 
   useEffect(() => {
     if (!open) return;
     setSubmitted(false);
+    setMediaErr({});
+    setPreviewing(false);
+    setRingtone(editing?.ringtoneId ? { kind: "stored", id: editing.ringtoneId, name: editing.ringtoneName ?? "Custom ringtone" } : null);
+    setImage(editing?.imageId ? { kind: "stored", id: editing.imageId, name: editing.imageName ?? "Image" } : null);
+    setVolume(Math.round((editing?.volume ?? 0.8) * 100));
     if (editing) {
       const t = new Date(editing.targetAt);
       setMode("datetime");
@@ -64,7 +85,10 @@ export function AlarmDialog({
       setSnooze(draftFrom({ months: 0, days: 0, hours: 0, minutes: 10 }));
     }
     const t = setInterval(() => setTick((x) => x + 1), 15000);
-    return () => clearInterval(t);
+    return () => {
+      clearInterval(t);
+      stopRinging();
+    };
   }, [open, editing]);
 
   const relParsed = parseDraft(rel);
@@ -98,12 +122,73 @@ export function AlarmDialog({
   const valid =
     computed.target && !computed.error && !snoozeError && !Object.keys(snoozeParsed.errors).length;
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume / 100;
+  }, [volume, ringtoneUrl]);
+
+  const stopPreview = () => {
+    audioRef.current?.pause();
+    stopRinging();
+    setPreviewing(false);
+  };
+  const togglePreview = () => {
+    unlockAudio();
+    if (previewing) return stopPreview();
+    if (ringtone && audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().then(() => setPreviewing(true)).catch(() =>
+        setMediaErr((m) => ({ ...m, audio: "This browser can't play that audio format. Try MP3 or WAV." })),
+      );
+    } else {
+      previewDefault(volume / 100);
+    }
+  };
+
+  const pickAudio = (f: File) => {
+    stopPreview();
+    if (!f.type.startsWith("audio/") && !/\.(mp3|wav|ogg|oga|m4a|aac|flac|opus|webm)$/i.test(f.name))
+      return setMediaErr((m) => ({ ...m, audio: "That file isn't an audio file." }));
+    const probe = document.createElement("audio");
+    if (f.type && probe.canPlayType(f.type) === "")
+      return setMediaErr((m) => ({ ...m, audio: `This browser can't play ${f.type} files. Try MP3 or WAV.` }));
+    setMediaErr((m) => ({ ...m, audio: null }));
+    setRingtone({ kind: "file", file: f, name: f.name });
+  };
+  const pickImage = (f: File) => {
+    if (!f.type.startsWith("image/")) return setMediaErr((m) => ({ ...m, image: "That file isn't an image." }));
+    setMediaErr((m) => ({ ...m, image: null }));
+    setImage({ kind: "file", file: f, name: f.name });
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
     unlockAudio();
-    if (!valid || !computed.target) return;
+    stopPreview();
+    if (!valid || !computed.target || saving) return;
+    setSaving(true);
+    const created: string[] = [];
+    let ringtoneId: string | null = null;
+    let imageId: string | null = null;
+    try {
+      ringtoneId = ringtone?.kind === "file" ? await putBlob(ringtone.file) : (ringtone?.id ?? null);
+      if (ringtone?.kind === "file") created.push(ringtoneId!);
+      imageId = image?.kind === "file" ? await putBlob(image.file) : (image?.id ?? null);
+    } catch (err) {
+      created.forEach((id) => void deleteBlob(id));
+      setMediaErr((m) => ({ ...m, save: storageErrorMessage(err) }));
+      setSaving(false);
+      return;
+    }
+    if (editing?.ringtoneId && editing.ringtoneId !== ringtoneId) void deleteBlob(editing.ringtoneId);
+    if (editing?.imageId && editing.imageId !== imageId) void deleteBlob(editing.imageId);
+    setSaving(false);
     onSave({
+      ringtoneId,
+      ringtoneName: ringtone?.name ?? null,
+      imageId,
+      imageName: image?.name ?? null,
+      volume: volume / 100,
       id: editing?.id ?? crypto.randomUUID(),
       label: label.trim(),
       targetAt: computed.target.getTime(),
@@ -190,9 +275,57 @@ export function AlarmDialog({
             </p>
           </fieldset>
 
+          <fieldset className="space-y-4">
+            <legend className="text-sm font-medium">Ringtone & image</legend>
+            <MediaPicker
+              id="ringtone-file"
+              label="Ringtone"
+              accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.opus"
+              icon={Music}
+              fileName={ringtone?.name ?? null}
+              emptyText="Default chime"
+              onPick={pickAudio}
+              onRemove={() => { stopPreview(); setRingtone(null); }}
+              error={mediaErr.audio}
+            >
+              {ringtoneUrl && <audio ref={audioRef} src={ringtoneUrl} onEnded={() => setPreviewing(false)} preload="auto" />}
+              <div className="mt-3 flex items-center gap-3">
+                <Button type="button" size="sm" variant="secondary" onClick={togglePreview} aria-label={previewing ? "Stop preview" : "Preview ringtone"}>
+                  {previewing ? <Square /> : <Play />}
+                  {previewing ? "Stop" : "Preview"}
+                </Button>
+                <Volume2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <Slider value={[volume]} min={0} max={100} step={1} onValueChange={([v]) => setVolume(v ?? 0)} aria-label="Alarm volume" className="flex-1" />
+                <span className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">{volume}%</span>
+              </div>
+            </MediaPicker>
+            <MediaPicker
+              id="image-file"
+              label="Wake-up image"
+              accept="image/*"
+              icon={ImageIcon}
+              fileName={image?.name ?? null}
+              emptyText="No image"
+              onPick={pickImage}
+              onRemove={() => setImage(null)}
+              error={mediaErr.image}
+            >
+              {imageUrl && (
+                <img
+                  src={imageUrl}
+                  alt="Selected wake-up image preview"
+                  className="mt-3 h-auto max-h-64 w-full rounded-lg object-contain"
+                  onError={() => setMediaErr((m) => ({ ...m, image: "This browser can't display that image format." }))}
+                />
+              )}
+            </MediaPicker>
+            <p className="text-xs text-muted-foreground">Files are saved only in this browser on this device. Images keep their original size and quality.</p>
+            {mediaErr.save && <p role="alert" className="text-sm text-destructive">{mediaErr.save}</p>}
+          </fieldset>
+
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" variant="glow" size="lg">{editing ? "Save changes" : "Create alarm"}</Button>
+            <Button type="submit" variant="glow" size="lg" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Create alarm"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
