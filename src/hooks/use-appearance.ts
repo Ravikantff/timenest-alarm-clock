@@ -27,7 +27,7 @@ export function useAppearance() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = appearance.theme;
+    document.documentElement.dataset["theme"] = appearance.theme;
     if (loaded) localStorage.setItem(APPEARANCE_KEY, JSON.stringify(appearance));
   }, [appearance, loaded]);
 

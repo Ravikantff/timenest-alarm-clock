@@ -23,7 +23,7 @@ export function MediaPicker({
   emptyText: string;
   onPick: (f: File) => void;
   onRemove: () => void;
-  error?: string | null;
+  error?: string | null | undefined;
   children?: React.ReactNode;
 }) {
   const ref = useRef<HTMLInputElement>(null);
