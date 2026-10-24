@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { format } from "date-fns";
-import { Plus, AlarmClockOff, Info } from "lucide-react";
+import { Plus, AlarmClockOff, Info, Palette } from "lucide-react";
+import { useAppearance } from "@/hooks/use-appearance";
+import { useBlobUrl } from "@/hooks/use-blob-url";
+import { AppearanceSheet } from "@/components/timenest/AppearanceSheet";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -32,6 +35,9 @@ function Index() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Alarm | null>(null);
   const [deleting, setDeleting] = useState<Alarm | null>(null);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const { appearance, setAppearance } = useAppearance();
+  const bgUrl = useBlobUrl(appearance.bgImageId);
 
   const sorted = [...alarms].sort((a, b) => Number(b.enabled) - Number(a.enabled) || nextRing(a) - nextRing(b));
 
@@ -42,11 +48,20 @@ function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-app">
-      <main className="mx-auto flex max-w-2xl flex-col gap-8 px-5 pb-28 pt-8 sm:pt-14">
+    <div className="relative min-h-screen bg-app">
+      {bgUrl && (
+        <div aria-hidden className="fixed inset-0 -z-0">
+          <img src={bgUrl} alt="" className="size-full object-cover" />
+          <div className="bg-overlay absolute inset-0" />
+        </div>
+      )}
+      <main className="relative mx-auto flex max-w-2xl flex-col gap-8 px-5 pb-28 pt-8 sm:pt-14">
         <header className="flex items-center justify-between">
           <h1 className="font-display text-xl tracking-tight">Time<span className="text-primary">Nest</span></h1>
-          <span className="text-xs text-muted-foreground">{now ? Intl.DateTimeFormat().resolvedOptions().timeZone : ""}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{now ? Intl.DateTimeFormat().resolvedOptions().timeZone : ""}</span>
+            <Button variant="ghost" size="icon" onClick={() => setAppearanceOpen(true)} aria-label="Appearance settings"><Palette /></Button>
+          </div>
         </header>
 
         <section aria-label="Current time" className="rounded-3xl border border-border bg-clock p-8 text-center shadow-card">
@@ -113,6 +128,8 @@ function Index() {
           toast.success(`Alarm set for ${format(a.targetAt, "EEE, MMM d 'at' h:mm a")}`);
         }}
       />
+
+      <AppearanceSheet open={appearanceOpen} onOpenChange={setAppearanceOpen} appearance={appearance} onChange={setAppearance} />
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
