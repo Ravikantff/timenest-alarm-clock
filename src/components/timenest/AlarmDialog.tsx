@@ -82,7 +82,7 @@ export function AlarmDialog({
     const [h, m] = time.split(":").map(Number);
     if (Number.isNaN(h) || Number.isNaN(m)) return { target: null, error: "Pick a time" };
     const t = new Date(date);
-    t.setHours(h, m, 0, 0);
+    t.setHours(h ?? 0, m ?? 0, 0, 0);
     if (t.getTime() <= Date.now()) return { target: t, error: "Choose a date and time in the future" };
     return { target: t, error: null };
   }, [mode, rel, date, time, tick]); // eslint-disable-line react-hooks/exhaustive-deps
