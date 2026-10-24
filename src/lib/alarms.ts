@@ -12,6 +12,13 @@ export type Alarm = {
   /** Pending snooze ring time (epoch ms), overrides targetAt while set. */
   snoozedUntil: number | null;
   snoozeCount: number;
+  /** IndexedDB blob ids for custom media (optional). */
+  ringtoneId?: string | null;
+  ringtoneName?: string | null;
+  /** 0..1 */
+  volume?: number;
+  imageId?: string | null;
+  imageName?: string | null;
 };
 
 export const STORAGE_KEY = "timenest.alarms.v1";

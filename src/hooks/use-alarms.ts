@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { deleteBlob } from "@/lib/media-store";
 import { addDuration, loadAlarms, nextRing, saveAlarms, type Alarm } from "@/lib/alarms";
 
 export function useNow(intervalMs = 1000) {
@@ -55,7 +56,12 @@ export function useAlarms() {
 
   const upsert = (a: Alarm) =>
     setAlarms((l) => (l.some((x) => x.id === a.id) ? l.map((x) => (x.id === a.id ? a : x)) : [...l, a]));
-  const remove = (id: string) => setAlarms((l) => l.filter((x) => x.id !== id));
+  const remove = (id: string) => {
+    const a = alarms.find((x) => x.id === id);
+    if (a?.ringtoneId) void deleteBlob(a.ringtoneId);
+    if (a?.imageId) void deleteBlob(a.imageId);
+    setAlarms((l) => l.filter((x) => x.id !== id));
+  };
   const toggle = (id: string, enabled: boolean) =>
     setAlarms((l) => l.map((x) => (x.id === id ? { ...x, enabled, snoozedUntil: enabled ? x.snoozedUntil : null } : x)));
 

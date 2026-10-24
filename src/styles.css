@@ -91,14 +91,59 @@
   --gradient-primary: linear-gradient(135deg, var(--primary), var(--primary-glow));
   --shadow-glow: 0 10px 30px -10px color-mix(in oklab, var(--primary) 60%, transparent);
   --shadow-card: 0 20px 40px -24px oklch(0 0 0 / 60%);
+  --app-bg: radial-gradient(1200px 600px at 50% -10%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 60%), var(--background);
+  --bg-overlay: oklch(0.12 0.04 268 / 72%);
 }
+
+[data-theme="midnight"] {
+  --background: oklch(0.11 0.02 265);
+  --card: oklch(0.16 0.025 265);
+  --popover: oklch(0.16 0.025 265);
+  --muted: oklch(0.21 0.03 265);
+  --secondary: oklch(0.22 0.03 265);
+  --accent: oklch(0.26 0.05 265);
+  --border: oklch(0.27 0.03 265);
+  --input: oklch(0.29 0.03 265);
+  --primary: oklch(0.72 0.12 255);
+  --app-bg: var(--background);
+  --bg-overlay: oklch(0.08 0.02 265 / 78%);
+}
+
+[data-theme="gradient"] {
+  --app-bg: linear-gradient(160deg, oklch(0.3 0.12 290), oklch(0.2 0.08 265) 45%, oklch(0.25 0.1 230));
+  --card: oklch(0.22 0.06 275 / 85%);
+}
+
+[data-theme="light"] {
+  --background: oklch(0.97 0.01 270);
+  --foreground: oklch(0.2 0.04 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.04 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.04 270);
+  --primary: oklch(0.52 0.18 280);
+  --primary-glow: oklch(0.55 0.17 250);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.93 0.02 270);
+  --secondary-foreground: oklch(0.2 0.04 270);
+  --muted: oklch(0.94 0.015 270);
+  --muted-foreground: oklch(0.45 0.03 270);
+  --accent: oklch(0.92 0.03 275);
+  --accent-foreground: oklch(0.2 0.04 270);
+  --border: oklch(0.88 0.02 270);
+  --input: oklch(0.86 0.02 270);
+  --ring: oklch(0.52 0.18 280);
+  --shadow-card: 0 20px 40px -28px oklch(0.3 0.05 270 / 35%);
+  --app-bg: radial-gradient(1200px 600px at 50% -10%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%), var(--background);
+  --bg-overlay: oklch(0.97 0.01 270 / 78%);
+}
+
+@utility bg-overlay { background: var(--bg-overlay); }
 
 @utility bg-gradient-primary { background-image: var(--gradient-primary); }
 @utility shadow-glow { box-shadow: var(--shadow-glow); }
 @utility shadow-card { box-shadow: var(--shadow-card); }
-@utility bg-app {
-  background: radial-gradient(1200px 600px at 50% -10%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 60%), var(--background);
-}
+@utility bg-app { background: var(--app-bg); }
 @utility bg-clock {
   background: linear-gradient(160deg, color-mix(in oklab, var(--primary) 12%, var(--card)), var(--card) 60%, color-mix(in oklab, var(--primary-glow) 10%, var(--card)));
 }
